@@ -1,0 +1,53 @@
+
+{% extends "base.html" %}
+
+{% block title %}Sales History | InventoryPro{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+        <h1 class="fw-bold">Sales History</h1>
+        <p class="text-secondary mb-0">Review recorded sales transactions.</p>
+    </div>
+
+    <a href="{{ url_for('new_sale') }}" class="btn btn-success">
+        + Record Sale
+    </a>
+</div>
+
+<div class="card border-0 shadow-sm rounded-4 p-3">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Sale ID</th>
+                    <th>Date</th>
+                    <th>Items Sold</th>
+                    <th>Total Amount</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for s in sales %}
+                <tr>
+                    <td>#{{ s.sale_id }}</td>
+                    <td>{{ s.sale_date }}</td>
+                    <td>{{ s.items_sold }}</td>
+                    <td class="fw-semibold">
+                        ₹{{ "%.2f"|format(s.total_amount) }}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="4" class="text-center text-secondary py-4">
+                        No sales recorded yet.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}

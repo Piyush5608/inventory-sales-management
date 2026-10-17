@@ -1,0 +1,104 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}InventoryPro{% endblock %}</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+          rel="stylesheet">
+
+    <style>
+        body {
+            background: #f4f7fb;
+            color: #1e293b;
+            font-family: Arial, sans-serif;
+        }
+
+        .sidebar {
+            width: 245px;
+            min-height: 100vh;
+            background: #172033;
+            position: fixed;
+            top: 0;
+            left: 0;
+            padding: 25px 16px;
+        }
+
+        .brand {
+            color: white;
+            font-size: 23px;
+            font-weight: bold;
+            padding: 8px 12px 30px;
+        }
+
+        .sidebar a {
+            display: block;
+            color: #cbd5e1;
+            text-decoration: none;
+            padding: 13px 15px;
+            border-radius: 8px;
+            margin-bottom: 7px;
+        }
+
+        .sidebar a:hover {
+            background: #334155;
+            color: white;
+        }
+
+        .main-content {
+            margin-left: 245px;
+            padding: 32px;
+        }
+
+        .stat-card {
+            border: none;
+            border-radius: 14px;
+            box-shadow: 0 3px 15px rgba(0,0,0,.05);
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                position: relative;
+                width: 100%;
+                min-height: auto;
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <aside class="sidebar">
+        <div class="brand">InventoryPro</div>
+
+        <a href="{{ url_for('dashboard') }}">📊 Dashboard</a>
+        <a href="{{ url_for('products') }}">📦 Products</a>
+        <a href="{{ url_for('add_product') }}">➕ Add Product</a>
+        <a href="{{ url_for('sales') }}">🧾 Sales History</a>
+        <a href="{{ url_for('new_sale') }}">🛒 Record Sale</a>
+        <a href="{{ url_for('restock') }}" class="nav-link">📦 Restock Inventory</a>
+        <a href="{{ url_for('stock_history') }}" class="nav-link">📈 Stock History</a>
+
+    </aside>
+          
+    <main class="main-content">
+        {% for message in get_flashed_messages() %}
+            <div class="alert alert-info alert-dismissible fade show">
+                {{ message }}
+                <button type="button" class="btn-close"
+                        data-bs-dismiss="alert"></button>
+            </div>
+        {% endfor %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
