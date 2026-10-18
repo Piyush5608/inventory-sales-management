@@ -264,6 +264,51 @@ def dashboard():
         conn.close()
 
 
+@app.route("/orders")
+def orders_page():
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    try:
+        cursor.execute("""
+            SELECT
+                order_id,
+                customer_name,
+                customer_email,
+                total_amount,
+                order_status,
+                created_at
+            FROM orders
+            ORDER BY created_at DESC
+        """)
+
+        orders = cursor.fetchall()
+
+        return render_template("orders.html", orders=orders)
+
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.route("/orders/<int:order_id>")
+def order_details(order_id):
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    try:
+        cursor.execute("SELECT * FROM orders WHERE order_id = %s", (order_id,))
+        order = cursor.fetchone()
+
+        if order is None:
+            return "Order not found", 404
+
+        return render_template("order_details.html", order=order)
+
+    finally:
+        cursor.close()
+        conn.close()
+
 
 @app.route("/products")
 def products():
