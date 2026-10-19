@@ -26,7 +26,17 @@
                     <td>{{ order.customer_name }}</td>
                     <td>{{ order.customer_email }}</td>
                     <td>₹{{ "%.2f"|format(order.total_amount) }}</td>
-                    <td>{{ order.order_status }}</td>
+                    <td>
+                        {% if order.order_status == 'PAID' %}
+                            <span class="badge bg-success">PAID</span>
+                        {% elif order.order_status == 'PENDING' %}
+                            <span class="badge bg-warning text-dark">PENDING</span>
+                        {% elif order.order_status == 'CANCELLED' %}
+                            <span class="badge bg-danger">CANCELLED</span>
+                        {% else %}
+                            <span class="badge bg-secondary">{{ order.order_status }}</span>
+                        {% endif %}
+                    </td>
                     <td>{{ order.created_at }}</td>
                     <td>
                        
@@ -36,9 +46,17 @@
                     </a> -->
 
                     <a href="{{ url_for('order_details', order_id=order.order_id) }}"
-                    class="btn btn-sm btn-primary">
-                    View
-                </a>
+                    class="btn btn-sm btn-primary">View</a>
+                    
+                    {% if order.order_status == 'PENDING' %}
+                        <form action="{{ url_for('cancel_order_from_page', order_id=order.order_id) }}"
+                            method="POST"
+                            onsubmit="return confirm('Are you sure you want to cancel this order?');">
+                            <button type="submit" class="btn btn-sm btn-danger mt-1">
+                                Cancel Order
+                            </button>
+                        </form>
+                    {% endif %}
 
                     </td>
                 </tr>

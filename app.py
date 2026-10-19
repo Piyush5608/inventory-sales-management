@@ -291,6 +291,24 @@ def orders_page():
         conn.close()
 
 
+# @app.route("/orders/<int:order_id>")
+# def order_details(order_id):
+#     conn = get_db_connection()
+#     cursor = conn.cursor(dictionary=True)
+
+#     try:
+#         cursor.execute("SELECT * FROM orders WHERE order_id = %s", (order_id,))
+#         order = cursor.fetchone()
+
+#         if order is None:
+#             return "Order not found", 404
+
+#         return render_template("order_details.html", order=order)
+
+#     finally:
+#         cursor.close()
+#         conn.close()
+
 @app.route("/orders/<int:order_id>")
 def order_details(order_id):
     conn = get_db_connection()
@@ -303,11 +321,24 @@ def order_details(order_id):
         if order is None:
             return "Order not found", 404
 
-        return render_template("order_details.html", order=order)
+        cursor.execute("""
+            SELECT p.product_name,
+                   oi.quantity,
+                   oi.unit_price,
+                   (oi.quantity * oi.unit_price) AS subtotal
+            FROM order_items oi
+            JOIN products p ON p.product_id = oi.product_id
+            WHERE oi.order_id = %s
+        """, (order_id,))
+        items = cursor.fetchall()
+
+        return render_template("order_details.html", order=order, items=items)
 
     finally:
         cursor.close()
         conn.close()
+
+
 
 
 @app.route("/products")
@@ -820,6 +851,23 @@ def cancel_order(order_id):
     finally:
         cursor.close()
         conn.close()
+
+
+@app.route("/orders/<int:order_id>/cancel", methods=["POST"])
+def cancel_order_from_page(order_id):
+    response, status_code = cancel_order(order_id)
+
+    if status_code == 200:
+        return redirect(url_for("orders_page"))
+
+    if status_code == 404:
+        return "Order not found.", 404
+
+    if status_code == 400:
+        return response["message"], 400
+
+    return response["message"], 500
+
 
 
 @app.route("/api/order-summary", methods=["GET"])
