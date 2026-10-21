@@ -610,9 +610,10 @@ def create_order():
                 customer_name,
                 customer_email,
                 total_amount,
-                order_status
+                order_status,
+                stock_deducted
             )
-            VALUES (%s, %s, %s, 'PENDING')
+            VALUES (%s, %s, %s, 'PENDING', 1)
         """, (customer_name, customer_email, total))
 
         order_id = cursor.lastrowid
@@ -628,7 +629,13 @@ def create_order():
         """, (order_id, product_id, quantity, product["price"]))
 
         # Stock is NOT deducted yet.
-        # It will be deducted after verified payment.
+        # It will be deducted after verified payment.later
+        # Deduct stock when the order is created.
+        cursor.execute("""
+            UPDATE products
+            SET stock_quantity = stock_quantity - %s
+            WHERE product_id = %s
+        """, (quantity, product_id))
 
         conn.commit()
 
@@ -787,6 +794,72 @@ def get_payment_status(order_id):
         conn.close()
 
 
+# @app.route("/api/orders/<int:order_id>/cancel", methods=["POST"])
+# def cancel_order(order_id):
+#     conn = get_db_connection()
+#     cursor = conn.cursor(dictionary=True)
+
+#     try:
+#         conn.start_transaction()
+
+#         cursor.execute("""
+#             SELECT order_status
+#             FROM orders
+#             WHERE order_id = %s
+#             FOR UPDATE
+#         """, (order_id,))
+
+#         order = cursor.fetchone()
+
+#         if order is None:
+#             conn.rollback()
+#             return {
+#                 "success": False,
+#                 "message": "Order not found."
+#             }, 404
+
+#         if order["order_status"] != "PENDING":
+#             conn.rollback()
+#             return {
+#                 "success": False,
+#                 "message": "Only pending orders can be cancelled."
+#             }, 400
+
+#         cursor.execute("""
+#             UPDATE orders
+#             SET order_status = 'CANCELLED'
+#             WHERE order_id = %s
+#         """, (order_id,))
+
+#         cursor.execute("""
+#             UPDATE payments
+#             SET payment_status = 'FAILED'
+#             WHERE order_id = %s
+#               AND payment_status = 'PENDING'
+#         """, (order_id,))
+
+#         conn.commit()
+
+#         return {
+#             "success": True,
+#             "message": "Order cancelled successfully.",
+#             "order_id": order_id,
+#             "order_status": "CANCELLED"
+#         }, 200
+
+#     except Exception:
+#         conn.rollback()
+#         app.logger.exception("Order cancellation failed")
+#         return {
+#             "success": False,
+#             "message": "Could not cancel order."
+#         }, 500
+
+#     finally:
+#         cursor.close()
+#         conn.close()
+
+
 @app.route("/api/orders/<int:order_id>/cancel", methods=["POST"])
 def cancel_order(order_id):
     conn = get_db_connection()
@@ -795,8 +868,10 @@ def cancel_order(order_id):
     try:
         conn.start_transaction()
 
+        # 1. Lock the order so concurrent cancellations cannot
+        # restore stock twice.
         cursor.execute("""
-            SELECT order_status
+            SELECT order_id, order_status
             FROM orders
             WHERE order_id = %s
             FOR UPDATE
@@ -818,12 +893,43 @@ def cancel_order(order_id):
                 "message": "Only pending orders can be cancelled."
             }, 400
 
+        # 2. Get all products and quantities in this order.
+        cursor.execute("""
+            SELECT product_id, quantity
+            FROM order_items
+            WHERE order_id = %s
+        """, (order_id,))
+
+        items = cursor.fetchall()
+
+        if not items:
+            conn.rollback()
+            return {
+                "success": False,
+                "message": "Order has no items; cancellation aborted."
+            }, 400
+
+        # 3. Restore stock for each item.
+        # This is correct only if stock was deducted at order creation.
+        for item in items:
+            cursor.execute("""
+                UPDATE products
+                SET stock_quantity = stock_quantity + %s
+                WHERE product_id = %s
+            """, (item["quantity"], item["product_id"]))
+
+            if cursor.rowcount != 1:
+                raise Exception("Could not restore product stock.")
+
+        # 4. Cancel the order.
         cursor.execute("""
             UPDATE orders
             SET order_status = 'CANCELLED'
             WHERE order_id = %s
+              AND order_status = 'PENDING'
         """, (order_id,))
 
+        # 5. Mark any pending payment as failed.
         cursor.execute("""
             UPDATE payments
             SET payment_status = 'FAILED'
@@ -831,11 +937,12 @@ def cancel_order(order_id):
               AND payment_status = 'PENDING'
         """, (order_id,))
 
+        # 6. Save stock and status changes together.
         conn.commit()
 
         return {
             "success": True,
-            "message": "Order cancelled successfully.",
+            "message": "Order cancelled and stock restored.",
             "order_id": order_id,
             "order_status": "CANCELLED"
         }, 200
