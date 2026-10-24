@@ -247,6 +247,56 @@ def dashboard():
 
         order_summary = cursor.fetchone()
 
+        # 1. Daily sales revenue for the last 7 days
+        cursor.execute("""
+                SELECT
+                    DATE(sale_date) AS sale_day,
+                    COALESCE(SUM(total_amount), 0) AS daily_revenue
+                    FROM sales
+                    WHERE sale_date >= CURDATE() - INTERVAL 6 DAY
+                    AND sale_date < CURDATE() + INTERVAL 1 DAY
+                    GROUP BY DATE(sale_date)
+                                    ORDER BY sale_day
+                """)
+        sales_trend = cursor.fetchall()
+
+        #         # 2. Top 5 products by quantity sold
+        # cursor.execute("""
+        #         SELECT
+        #             p.product_name,
+        #             COALESCE(SUM(s.items_sold), 0) AS quantity_sold
+        #             FROM sales s
+        #             JOIN products p ON p.product_id = s.product_id
+        #             GROUP BY p.product_id, p.product_name
+        #             ORDER BY quantity_sold DESC
+        #             LIMIT 5
+        #         """)
+        # top_products = cursor.fetchall() 
+
+                # 2. Top 5 products by quantity sold
+        cursor.execute("""
+            SELECT
+                p.product_name,
+                COALESCE(SUM(si.quantity), 0) AS quantity_sold
+            FROM sale_items si
+            JOIN products p ON p.product_id = si.product_id
+            GROUP BY p.product_id, p.product_name
+            ORDER BY quantity_sold DESC
+            LIMIT 5
+        """)
+        top_products = cursor.fetchall()
+
+        sales_trend = [
+            {'sale_day': str(r['sale_day']), 'daily_revenue': float(r['daily_revenue'])}
+            for r in sales_trend
+        ]
+        top_products = [
+            {'product_name': r['product_name'], 'quantity_sold': int(r['quantity_sold'])}
+            for r in top_products
+        ]
+
+        
+
         return render_template(
             "dashboard.html",
             product_count=product_count,
@@ -255,8 +305,9 @@ def dashboard():
             inventory_value=inventory_value,
             low_stock_products=low_stock_products,
             recent_sales=recent_sales,
-            order_summary=order_summary
-
+            order_summary=order_summary,
+            sales_trend=sales_trend,
+            top_products=top_products
         )
 
     finally:
