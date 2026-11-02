@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}Create Order | InventoryPro{% endblock %}
+
+{% block content %}
+
+<div class="mb-4">
+    <h1 class="fw-bold">Create Order</h1>
+    <p class="text-secondary">Enter customer details and the product to order.</p>
+</div>
+
+<div class="card border-0 shadow-sm rounded-4 p-4" style="max-width: 700px;">
+
+    <form method="POST" action="{{ url_for('new_order') }}" class="row g-3">
+
+        <h5 class="fw-bold mb-0">Customer Details</h5>
+
+        <div class="col-12">
+            <label class="form-label">Name</label>
+            <input type="text" name="customer_name" class="form-control"
+                   required minlength="2" maxlength="150"
+                   value="{{ form.name if form else '' }}">
+            {% if errors and errors.name %}
+                <div class="text-danger small">{{ errors.name }}</div>
+            {% endif %}
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label">Email</label>
+            <input type="email" name="customer_email" class="form-control"
+                   required maxlength="255"
+                   value="{{ form.email if form else '' }}">
+            {% if errors and errors.email %}
+                <div class="text-danger small">{{ errors.email }}</div>
+            {% endif %}
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label">Phone</label>
+            <input type="tel" name="customer_phone" class="form-control"
+                   required pattern="[6-9][0-9]{9}" maxlength="10"
+                   placeholder="9876543210"
+                   value="{{ form.phone if form else '' }}">
+            {% if errors and errors.phone %}
+                <div class="text-danger small">{{ errors.phone }}</div>
+            {% endif %}
+        </div>
+
+        <h5 class="fw-bold mt-4 mb-0">Order Item</h5>
+
+        <div class="col-md-8">
+            <label class="form-label">Product</label>
+            <select name="product_id" class="form-select" required>
+                {% for p in products %}
+                    <option value="{{ p.product_id }}">
+                        {{ p.product_name }} — ₹{{ "%.2f"|format(p.price) }}
+                        (Stock: {{ p.stock_quantity }})
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="col-md-4">
+            <label class="form-label">Quantity</label>
+            <input type="number" name="quantity" min="1" class="form-control" required>
+        </div>
+
+        <div class="col-12 mt-4">
+            <button type="submit" class="btn btn-success">Place Order</button>
+            <a href="{{ url_for('orders_page') }}" class="btn btn-outline-secondary ms-2">View Orders</a>
+        </div>
+
+    </form>
+</div>
+
+{% endblock %}

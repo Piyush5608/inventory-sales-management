@@ -1,10 +1,11 @@
-
+import re
 from decimal import Decimal, InvalidOperation
 
 from flask import (
     Flask, render_template, request,
-    redirect, url_for, flash
+    redirect, url_for, flash,
 )
+
 from db import get_db_connection
 
 app = Flask(__name__)
@@ -12,6 +13,35 @@ app = Flask(__name__)
 # Local development only. Move this to an environment variable
 # before publishing the project.
 app.secret_key = "change-this-to-a-random-secret"
+
+# ---------- Customer validation ----------
+EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+PHONE_RE = re.compile(r'^[6-9]\d{9}$')   # 10-digit Indian mobile
+
+
+def validate_customer(name, email, phone):
+    errors = {}
+
+    name = (name or '').strip()
+    email = (email or '').strip().lower()
+    phone = re.sub(r'[\s\-]', '', phone or '')
+    if phone.startswith('+91'):
+        phone = phone[3:]
+
+    if len(name) < 2:
+        errors['name'] = 'Name kam se kam 2 characters ka hona chahiye.'
+    elif len(name) > 150:
+        errors['name'] = 'Name bahut lamba hai.'
+
+    if not EMAIL_RE.match(email):
+        errors['email'] = 'Valid email daalo.'
+    elif len(email) > 255:
+        errors['email'] = 'Email bahut lamba hai.'
+
+    if not PHONE_RE.match(phone):
+        errors['phone'] = 'Phone 10 digits ka hona chahiye (6-9 se shuru).'
+
+    return errors, {'name': name, 'email': email, 'phone': phone}
 
 
 @app.route("/api/products", methods=["GET"])
@@ -256,22 +286,11 @@ def dashboard():
                     WHERE sale_date >= CURDATE() - INTERVAL 6 DAY
                     AND sale_date < CURDATE() + INTERVAL 1 DAY
                     GROUP BY DATE(sale_date)
-                                    ORDER BY sale_day
+                    ORDER BY sale_day
                 """)
         sales_trend = cursor.fetchall()
 
-        #         # 2. Top 5 products by quantity sold
-        # cursor.execute("""
-        #         SELECT
-        #             p.product_name,
-        #             COALESCE(SUM(s.items_sold), 0) AS quantity_sold
-        #             FROM sales s
-        #             JOIN products p ON p.product_id = s.product_id
-        #             GROUP BY p.product_id, p.product_name
-        #             ORDER BY quantity_sold DESC
-        #             LIMIT 5
-        #         """)
-        # top_products = cursor.fetchall() 
+
 
                 # 2. Top 5 products by quantity sold
         cursor.execute("""
@@ -326,6 +345,7 @@ def orders_page():
                 order_id,
                 customer_name,
                 customer_email,
+                customer_phone,
                 total_amount,
                 order_status,
                 created_at
@@ -341,6 +361,99 @@ def orders_page():
         cursor.close()
         conn.close()
 
+@app.route("/orders/new", methods=["GET", "POST"])
+def new_order():
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    try:
+        cursor.execute("""
+            SELECT product_id, product_name, price, stock_quantity
+            FROM products
+            WHERE stock_quantity > 0
+            ORDER BY product_name
+        """)
+        products = cursor.fetchall()
+
+        if request.method == "POST":
+            errors, clean = validate_customer(
+                request.form.get("customer_name"),
+                request.form.get("customer_email"),
+                request.form.get("customer_phone"),
+            )
+
+            product_id = quantity = None
+            try:
+                product_id = int(request.form.get("product_id"))
+                quantity = int(request.form.get("quantity"))
+                if quantity < 1:
+                    errors["quantity"] = "Quantity kam se kam 1 honi chahiye."
+            except (TypeError, ValueError):
+                errors["quantity"] = "Valid product aur quantity chuno."
+
+            if errors:
+                return render_template(
+                    "new_order.html", products=products, errors=errors, form=clean
+                )
+
+            # End the read above, then lock the product row for this order.
+            conn.rollback()
+
+            cursor.execute("""
+                SELECT product_id, price, stock_quantity
+                FROM products
+                WHERE product_id = %s
+                FOR UPDATE
+            """, (product_id,))
+            product = cursor.fetchone()
+
+            if product is None:
+                conn.rollback()
+                errors["quantity"] = "Product nahi mila."
+            elif quantity > product["stock_quantity"]:
+                conn.rollback()
+                errors["quantity"] = f"Sirf {product['stock_quantity']} stock available hai."
+
+            if errors:
+                return render_template(
+                    "new_order.html", products=products, errors=errors, form=clean
+                )
+
+            total = product["price"] * quantity
+
+            cursor.execute("""
+                INSERT INTO orders
+                    (customer_name, customer_email, customer_phone,
+                     total_amount, order_status, stock_deducted)
+                VALUES (%s, %s, %s, %s, 'PENDING', 1)
+            """, (clean["name"], clean["email"], clean["phone"], total))
+            order_id = cursor.lastrowid
+
+            cursor.execute("""
+                INSERT INTO order_items (order_id, product_id, quantity, unit_price)
+                VALUES (%s, %s, %s, %s)
+            """, (order_id, product_id, quantity, product["price"]))
+
+            # Same as /api/orders: stock is deducted when the order is created.
+            cursor.execute("""
+                UPDATE products
+                SET stock_quantity = stock_quantity - %s
+                WHERE product_id = %s
+            """, (quantity, product_id))
+
+            conn.commit()
+            flash("Order place ho gaya.")
+            return redirect(url_for("order_details", order_id=order_id))
+
+        return render_template("new_order.html", products=products, errors=None, form=None)
+
+    except Exception:
+        conn.rollback()
+        app.logger.exception("Order creation from page failed")
+        raise
+    finally:
+        cursor.close()
+        conn.close()
 
 # @app.route("/orders/<int:order_id>")
 # def order_details(order_id):

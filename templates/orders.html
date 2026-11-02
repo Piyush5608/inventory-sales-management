@@ -13,6 +13,7 @@
                     <th>Order ID</th>
                     <th>Customer</th>
                     <th>Email</th>
+                    <th>Phone</th>
                     <th>Total Amount</th>
                     <th>Status</th>
                     <th>Order Date</th>
@@ -25,6 +26,7 @@
                     <td>{{ order.order_id }}</td>
                     <td>{{ order.customer_name }}</td>
                     <td>{{ order.customer_email }}</td>
+                    <td>{{ order.customer_phone or '-' }}</td>
                     <td>₹{{ "%.2f"|format(order.total_amount) }}</td>
                     <td>
                         {% if order.order_status == 'PAID' %}
