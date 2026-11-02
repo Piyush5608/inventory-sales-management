@@ -502,31 +502,83 @@ def order_details(order_id):
         cursor.close()
         conn.close()
 
-
-
-
 @app.route("/products")
 def products():
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
     try:
-        cursor.execute("""
+        q = request.args.get("q", "").strip()
+        category_id = request.args.get("category", type=int)
+        low_only = request.args.get("low_stock") == "1"
+
+        sql = """
             SELECT p.*, c.category_name
             FROM products p
             LEFT JOIN categories c
                 ON p.category_id = c.category_id
-            ORDER BY p.product_id DESC
-        """)
+            WHERE 1 = 1
+        """
+        params = []
+
+        if q:
+            sql += " AND (p.product_name LIKE %s OR p.sku LIKE %s)"
+            like = f"%{q}%"
+            params.extend([like, like])
+
+        if category_id:
+            sql += " AND p.category_id = %s"
+            params.append(category_id)
+
+        if low_only:
+            sql += " AND p.stock_quantity <= p.reorder_level"
+
+        sql += " ORDER BY p.product_id DESC"
+
+        cursor.execute(sql, params)
         product_list = cursor.fetchall()
+
+        cursor.execute(
+            "SELECT category_id, category_name "
+            "FROM categories ORDER BY category_name"
+        )
+        categories = cursor.fetchall()
 
         return render_template(
             "product.html",
-            products=product_list
+            products=product_list,
+            categories=categories,
+            q=q,
+            selected_category=category_id,
+            low_only=low_only,
         )
     finally:
         cursor.close()
         conn.close()
+
+
+# @app.route("/products")
+# def products():
+#     conn = get_db_connection()
+#     cursor = conn.cursor(dictionary=True)
+
+#     try:
+#         cursor.execute("""
+#             SELECT p.*, c.category_name
+#             FROM products p
+#             LEFT JOIN categories c
+#                 ON p.category_id = c.category_id
+#             ORDER BY p.product_id DESC
+#         """)
+#         product_list = cursor.fetchall()
+
+#         return render_template(
+#             "product.html",
+#             products=product_list
+#         )
+#     finally:
+#         cursor.close()
+#         conn.close()
 
 
 @app.route("/products/add", methods=["GET", "POST"])

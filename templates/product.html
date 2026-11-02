@@ -16,6 +16,46 @@
     </a>
 </div>
 
+
+<form method="GET" action="{{ url_for('products') }}"
+      class="card border-0 shadow-sm rounded-4 p-3 mb-3">
+    <div class="row g-2 align-items-end">
+
+        <div class="col-md-5">
+            <label class="form-label small mb-1">Search</label>
+            <input type="text" name="q" value="{{ q }}"
+                   class="form-control" placeholder="Product name or SKU">
+        </div>
+
+        <div class="col-md-3">
+            <label class="form-label small mb-1">Category</label>
+            <select name="category" class="form-select">
+                <option value="">All categories</option>
+                {% for c in categories %}
+                    <option value="{{ c.category_id }}"
+                        {% if selected_category == c.category_id %}selected{% endif %}>
+                        {{ c.category_name }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="col-md-2">
+            <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" name="low_stock"
+                       value="1" id="lowStock" {% if low_only %}checked{% endif %}>
+                <label class="form-check-label" for="lowStock">Low stock only</label>
+            </div>
+        </div>
+
+        <div class="col-md-2 d-flex gap-2">
+            <button type="submit" class="btn btn-primary">Filter</button>
+            <a href="{{ url_for('products') }}" class="btn btn-outline-secondary">Reset</a>
+        </div>
+
+    </div>
+</form>
+
 <div class="card border-0 shadow-sm rounded-4 p-3">
     <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
@@ -39,17 +79,20 @@
                     <td>₹{{ "%.2f"|format(p.price) }}</td>
                     <td>{{ p.stock_quantity }}</td>
                     <td>
-                        {% if p.stock_quantity <= p.reorder_level %}
-                            <span class="badge text-bg-danger">Low Stock</span>
-                        {% else %}
-                            <span class="badge text-bg-success">In Stock</span>
-                        {% endif %}
+                    {% if p.stock_quantity == 0 %}
+                    <span class="badge text-bg-dark">Out of Stock</span>
+                    {% elif p.stock_quantity <= p.reorder_level %}
+                    <span class="badge text-bg-danger">Low Stock</span>
+                    {% else %}
+                    <span class="badge text-bg-success">In Stock</span>
+                    {% endif %}
                     </td>
                 </tr>
                 {% else %}
                 <tr>
                     <td colspan="6" class="text-center text-secondary py-4">
-                        No products found. Add your first product.
+                        No products found. {% if q or selected_category or low_only %}Try changing the filters.{% else %}Add your first product.{% endif %}
+                        <!-- No products found. Add your first product. -->
                     </td>
                 </tr>
                 {% endfor %}
