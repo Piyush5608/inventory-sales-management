@@ -52,7 +52,8 @@
             <label class="form-label">Product</label>
             <select name="product_id" class="form-select" required>
                 {% for p in products %}
-                    <option value="{{ p.product_id }}">
+                    <option value="{{ p.product_id }}"
+                        {% if selected_product == p.product_id %}selected{% endif %}>
                         {{ p.product_name }} — ₹{{ "%.2f"|format(p.price) }}
                         (Stock: {{ p.stock_quantity }})
                     </option>

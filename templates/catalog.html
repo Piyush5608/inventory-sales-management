@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block title %}Catalog | InventoryPro{% endblock %}
+
+{% block content %}
+
+<div class="mb-4">
+    <h1 class="fw-bold">Product Catalog</h1>
+    <p class="text-secondary mb-0">Browse products and place an order.</p>
+</div>
+
+<form method="GET" action="{{ url_for('catalog') }}"
+      class="card border-0 shadow-sm rounded-4 p-3 mb-4">
+    <div class="row g-2 align-items-end">
+
+        <div class="col-md-4">
+            <label class="form-label small mb-1">Search</label>
+            <input type="text" name="q" value="{{ q }}"
+                   class="form-control" placeholder="Product name or SKU">
+        </div>
+
+        <div class="col-md-3">
+            <label class="form-label small mb-1">Category</label>
+            <select name="category" class="form-select">
+                <option value="">All categories</option>
+                {% for c in categories %}
+                    <option value="{{ c.category_id }}"
+                        {% if selected_category == c.category_id %}selected{% endif %}>
+                        {{ c.category_name }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="col-md-3">
+            <label class="form-label small mb-1">Sort by</label>
+            <select name="sort" class="form-select">
+                <option value="newest" {% if sort == 'newest' %}selected{% endif %}>Newest</option>
+                <option value="name" {% if sort == 'name' %}selected{% endif %}>Name A-Z</option>
+                <option value="price_asc" {% if sort == 'price_asc' %}selected{% endif %}>Price: Low to High</option>
+                <option value="price_desc" {% if sort == 'price_desc' %}selected{% endif %}>Price: High to Low</option>
+            </select>
+        </div>
+
+        <div class="col-md-2">
+            <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" name="low_stock"
+                       value="1" id="lowStock" {% if low_only %}checked{% endif %}>
+                <label class="form-check-label" for="lowStock">Low stock</label>
+            </div>
+        </div>
+
+        <div class="col-12 d-flex gap-2 mt-2">
+            <button type="submit" class="btn btn-primary">Apply</button>
+            <a href="{{ url_for('catalog') }}" class="btn btn-outline-secondary">Reset</a>
+        </div>
+
+    </div>
+</form>
+
+<div class="row g-4">
+    {% for p in products %}
+    <div class="col-sm-6 col-lg-4 col-xl-3">
+        <div class="card border-0 shadow-sm rounded-4 h-100 p-3">
+
+            <div class="d-flex align-items-center mb-3">
+                <div class="rounded-circle bg-primary-subtle text-primary fw-bold
+                            d-flex align-items-center justify-content-center me-3"
+                     style="width: 48px; height: 48px; font-size: 1.2rem;">
+                    {{ p.product_name[0]|upper }}
+                </div>
+                <div>
+                    <div class="fw-bold">{{ p.product_name }}</div>
+                    <div class="text-secondary small">
+                        {{ p.category_name or "Uncategorized" }}
+                    </div>
+                </div>
+            </div>
+
+            <div class="fs-4 fw-bold mb-1">₹{{ "%.2f"|format(p.price) }}</div>
+            <div class="text-secondary small mb-3">SKU: {{ p.sku }}</div>
+
+            <div class="mb-3">
+                {% if p.stock_quantity == 0 %}
+                    <span class="badge text-bg-dark">Out of Stock</span>
+                {% elif p.stock_quantity <= p.reorder_level %}
+                    <span class="badge text-bg-danger">Low Stock ({{ p.stock_quantity }} left)</span>
+                {% else %}
+                    <span class="badge text-bg-success">In Stock ({{ p.stock_quantity }})</span>
+                {% endif %}
+            </div>
+
+            <div class="mt-auto">
+                {% if p.stock_quantity == 0 %}
+                    <button class="btn btn-secondary w-100" disabled>Unavailable</button>
+                {% else %}
+                    <a href="{{ url_for('new_order', product_id=p.product_id) }}"
+                       class="btn btn-primary w-100">Order Now</a>
+                {% endif %}
+            </div>
+
+        </div>
+    </div>
+    {% else %}
+    <div class="col-12">
+        <div class="alert alert-light text-center border">
+            No products found.
+            {% if q or selected_category or low_only %}Try changing the filters.{% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% endblock %}

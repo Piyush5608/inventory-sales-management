@@ -43,6 +43,32 @@ def validate_customer(name, email, phone):
 
     return errors, {'name': name, 'email': email, 'phone': phone}
 
+# ---------- Product filters (shared by /products and /catalog) ----------
+SORT_OPTIONS = {
+    "newest": "p.product_id DESC",
+    "name": "p.product_name ASC",
+    "price_asc": "p.price ASC",
+    "price_desc": "p.price DESC",
+}
+
+
+def build_product_filter(q, category_id, low_only):
+    where = ""
+    params = []
+
+    if q:
+        where += " AND (p.product_name LIKE %s OR p.sku LIKE %s)"
+        like = f"%{q}%"
+        params.extend([like, like])
+
+    if category_id:
+        where += " AND p.category_id = %s"
+        params.append(category_id)
+
+    if low_only:
+        where += " AND p.stock_quantity <= p.reorder_level"
+
+    return where, params
 
 @app.route("/api/products", methods=["GET"])
 def api_products():
@@ -367,12 +393,19 @@ def new_order():
     cursor = conn.cursor(dictionary=True)
 
     try:
+
+        selected_product = (
+        request.form.get("product_id", type=int)
+        or request.args.get("product_id", type=int)
+        )
+
         cursor.execute("""
             SELECT product_id, product_name, price, stock_quantity
             FROM products
             WHERE stock_quantity > 0
             ORDER BY product_name
         """)
+
         products = cursor.fetchall()
 
         if request.method == "POST":
@@ -393,7 +426,7 @@ def new_order():
 
             if errors:
                 return render_template(
-                    "new_order.html", products=products, errors=errors, form=clean
+                    "new_order.html", products=products, errors=errors, form=clean,selected_product=selected_product
                 )
 
             # End the read above, then lock the product row for this order.
@@ -416,7 +449,7 @@ def new_order():
 
             if errors:
                 return render_template(
-                    "new_order.html", products=products, errors=errors, form=clean
+                    "new_order.html", products=products, errors=errors, form=clean,selected_product=selected_product
                 )
 
             total = product["price"] * quantity
@@ -445,7 +478,7 @@ def new_order():
             flash("Order place ho gaya.")
             return redirect(url_for("order_details", order_id=order_id))
 
-        return render_template("new_order.html", products=products, errors=None, form=None)
+        return render_template("new_order.html", products=products, errors=None, form=None,selected_product=selected_product)
 
     except Exception:
         conn.rollback()
@@ -455,23 +488,7 @@ def new_order():
         cursor.close()
         conn.close()
 
-# @app.route("/orders/<int:order_id>")
-# def order_details(order_id):
-#     conn = get_db_connection()
-#     cursor = conn.cursor(dictionary=True)
 
-#     try:
-#         cursor.execute("SELECT * FROM orders WHERE order_id = %s", (order_id,))
-#         order = cursor.fetchone()
-
-#         if order is None:
-#             return "Order not found", 404
-
-#         return render_template("order_details.html", order=order)
-
-#     finally:
-#         cursor.close()
-#         conn.close()
 
 @app.route("/orders/<int:order_id>")
 def order_details(order_id):
@@ -557,28 +574,52 @@ def products():
         conn.close()
 
 
-# @app.route("/products")
-# def products():
-#     conn = get_db_connection()
-#     cursor = conn.cursor(dictionary=True)
+@app.route("/catalog")
+def catalog():
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
 
-#     try:
-#         cursor.execute("""
-#             SELECT p.*, c.category_name
-#             FROM products p
-#             LEFT JOIN categories c
-#                 ON p.category_id = c.category_id
-#             ORDER BY p.product_id DESC
-#         """)
-#         product_list = cursor.fetchall()
+    try:
+        q = request.args.get("q", "").strip()
+        category_id = request.args.get("category", type=int)
+        low_only = request.args.get("low_stock") == "1"
+        sort = request.args.get("sort", "newest")
 
-#         return render_template(
-#             "product.html",
-#             products=product_list
-#         )
-#     finally:
-#         cursor.close()
-#         conn.close()
+        # Whitelist: user ka text kabhi seedha ORDER BY mein nahi jata.
+        order_by = SORT_OPTIONS.get(sort, SORT_OPTIONS["newest"])
+        if sort not in SORT_OPTIONS:
+            sort = "newest"
+
+        where, params = build_product_filter(q, category_id, low_only)
+
+        cursor.execute(f"""
+            SELECT p.*, c.category_name
+            FROM products p
+            LEFT JOIN categories c
+                ON p.category_id = c.category_id
+            WHERE 1 = 1 {where}
+            ORDER BY {order_by}
+        """, params)
+        product_list = cursor.fetchall()
+
+        cursor.execute(
+            "SELECT category_id, category_name "
+            "FROM categories ORDER BY category_name"
+        )
+        categories = cursor.fetchall()
+
+        return render_template(
+            "catalog.html",
+            products=product_list,
+            categories=categories,
+            q=q,
+            selected_category=category_id,
+            low_only=low_only,
+            sort=sort,
+        )
+    finally:
+        cursor.close()
+        conn.close()
 
 
 @app.route("/products/add", methods=["GET", "POST"])
