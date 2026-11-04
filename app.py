@@ -687,6 +687,44 @@ def order_details(order_id):
         cursor.close()
         conn.close()
 
+@app.route("/orders/<int:order_id>/invoice")
+def order_invoice(order_id):
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    try:
+        cursor.execute("SELECT * FROM orders WHERE order_id = %s", (order_id,))
+        order = cursor.fetchone()
+
+        if order is None:
+            return "Order not found", 404
+
+        # Cancelled order ka invoice nahi banta.
+        if order["order_status"] == "CANCELLED":
+            flash("Cancelled orders do not have an invoice.")
+            return redirect(url_for("order_details", order_id=order_id))
+
+        cursor.execute("""
+            SELECT p.product_name,
+                   oi.quantity,
+                   oi.unit_price,
+                   (oi.quantity * oi.unit_price) AS subtotal
+            FROM order_items oi
+            JOIN products p ON p.product_id = oi.product_id
+            WHERE oi.order_id = %s
+        """, (order_id,))
+        items = cursor.fetchall()
+
+        return render_template(
+            "invoice.html",
+            order=order,
+            items=items,
+            invoice_number=f"INV-{order_id:05d}",
+        )
+    finally:
+        cursor.close()
+        conn.close()
+
 @app.route("/products")
 def products():
     conn = get_db_connection()

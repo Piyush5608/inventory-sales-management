@@ -16,7 +16,7 @@
             font-family: Arial, sans-serif;
         }
 
-        .sidebar {
+        /* .sidebar {
             width: 245px;
             min-height: 100vh;
             background: #172033;
@@ -24,6 +24,23 @@
             top: 0;
             left: 0;
             padding: 25px 16px;
+        } */
+
+        .sidebar {
+            width: 245px;
+            height: 100vh;
+            overflow-y: auto;
+            background: #172033;
+            position: fixed;
+            top: 0;
+            left: 0;
+            padding: 25px 16px;
+        }
+
+        .sidebar::-webkit-scrollbar { width: 6px; }
+        .sidebar::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 3px;
         }
 
         .brand {
@@ -63,6 +80,7 @@
                 position: relative;
                 width: 100%;
                 min-height: auto;
+                overflow-y: visible;
             }
 
             .main-content {

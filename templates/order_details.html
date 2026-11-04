@@ -8,6 +8,7 @@
 
     <p><strong>Customer:</strong> {{ order.customer_name }}</p>
     <p><strong>Email:</strong> {{ order.customer_email }}</p>
+    <p><strong>Phone:</strong> {{ order.customer_phone or '-' }}</p>
     <p><strong>Total:</strong> ₹{{ "%.2f"|format(order.total_amount) }}</p>
     <p><strong>Status:</strong> {{ order.order_status }}</p>
     <p><strong>Date:</strong> {{ order.created_at }}</p>
@@ -44,5 +45,11 @@
     <a href="{{ url_for('orders_page') }}" class="btn btn-secondary">
         Back to Orders
     </a>
+    {% if order.order_status != 'CANCELLED' %}
+    <a href="{{ url_for('order_invoice', order_id=order.order_id) }}"
+       class="btn btn-primary ms-2" target="_blank" rel="noopener">
+        🧾 View Invoice
+    </a>
+    {% endif %}
 </div>
 {% endblock %}
