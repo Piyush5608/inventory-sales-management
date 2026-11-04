@@ -1,9 +1,11 @@
 import re
 from decimal import Decimal, InvalidOperation
-
+import csv
+import io
+from datetime import date, datetime, timedelta
 from flask import (
-    Flask, render_template, request,
-    redirect, url_for, flash,
+    Flask, Response, render_template, request,
+    redirect, url_for, flash,abort,
 )
 
 from db import get_db_connection
@@ -69,6 +71,172 @@ def build_product_filter(q, category_id, low_only):
         where += " AND p.stock_quantity <= p.reorder_level"
 
     return where, params
+
+# ---------- Reports ----------
+ORDER_STATUSES = ("PENDING", "PAID", "CANCELLED")
+
+# Har report ek jagah define hai: title, filters aur table ke columns.
+# column = (key, label, kind). kind: text / money / status
+REPORTS = {
+    "sales": {
+        "title": "Sales Report",
+        "description": "Every recorded sale in the selected date range.",
+        "uses_dates": True,
+        "uses_status": False,
+        "columns": [
+            ("sale_id", "Sale ID", "text"),
+            ("sale_date", "Date", "text"),
+            ("items_sold", "Items Sold", "text"),
+            ("total_amount", "Total", "money"),
+        ],
+    },
+    "top_products": {
+        "title": "Top Products",
+        "description": "Best sellers by quantity sold in the selected date range (recorded sales).",
+        "uses_dates": True,
+        "uses_status": False,
+        "columns": [
+            ("product_name", "Product", "text"),
+            ("sku", "SKU", "text"),
+            ("quantity_sold", "Quantity Sold", "text"),
+            ("revenue", "Revenue", "money"),
+        ],
+    },
+    "low_stock": {
+        "title": "Low Stock",
+        "description": "Products at or below their reorder level right now.",
+        "uses_dates": False,
+        "uses_status": False,
+        "columns": [
+            ("product_name", "Product", "text"),
+            ("sku", "SKU", "text"),
+            ("category_name", "Category", "text"),
+            ("stock_quantity", "Stock", "text"),
+            ("reorder_level", "Reorder Level", "text"),
+        ],
+    },
+    "orders": {
+        "title": "Orders",
+        "description": "Customer orders in the selected date range, filterable by status.",
+        "uses_dates": True,
+        "uses_status": True,
+        "columns": [
+            ("order_id", "Order ID", "text"),
+            ("customer_name", "Customer", "text"),
+            ("customer_email", "Email", "text"),
+            ("customer_phone", "Phone", "text"),
+            ("order_status", "Status", "status"),
+            ("total_amount", "Total", "money"),
+            ("created_at", "Order Date", "text"),
+        ],
+    },
+}
+
+
+def parse_date(value, default):
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return default
+
+
+def get_report_params():
+    today = date.today()
+    start = parse_date(request.args.get("start"), today - timedelta(days=29))
+    end = parse_date(request.args.get("end"), today)
+    if start > end:
+        start, end = end, start
+
+    status = request.args.get("status", "").upper()
+    if status not in ORDER_STATUSES:   # whitelist
+        status = ""
+    return start, end, status
+
+
+def get_report_data(cursor, name, start, end, status):
+    # end ko "next day 00:00" bana dete hain, taaki end wale poore din ka data aaye.
+    end_next = end + timedelta(days=1)
+
+    if name == "sales":
+        cursor.execute("""
+            SELECT s.sale_id, s.sale_date,
+                   COALESCE(SUM(si.quantity), 0) AS items_sold,
+                   s.total_amount
+            FROM sales s
+            LEFT JOIN sale_items si ON si.sale_id = s.sale_id
+            WHERE s.sale_date >= %s AND s.sale_date < %s
+            GROUP BY s.sale_id, s.sale_date, s.total_amount
+            ORDER BY s.sale_date DESC
+        """, (start, end_next))
+
+    elif name == "top_products":
+        cursor.execute("""
+            SELECT p.product_name, p.sku,
+                   SUM(si.quantity) AS quantity_sold,
+                   SUM(si.quantity * si.unit_price) AS revenue
+            FROM sale_items si
+            JOIN sales s ON s.sale_id = si.sale_id
+            JOIN products p ON p.product_id = si.product_id
+            WHERE s.sale_date >= %s AND s.sale_date < %s
+            GROUP BY p.product_id, p.product_name, p.sku
+            ORDER BY quantity_sold DESC
+            LIMIT 10
+        """, (start, end_next))
+
+    elif name == "low_stock":
+        cursor.execute("""
+            SELECT p.product_name, p.sku, c.category_name,
+                   p.stock_quantity, p.reorder_level
+            FROM products p
+            LEFT JOIN categories c ON c.category_id = p.category_id
+            WHERE p.stock_quantity <= p.reorder_level
+            ORDER BY p.stock_quantity ASC
+        """)
+
+    else:  # orders
+        sql = """
+            SELECT order_id, customer_name, customer_email, customer_phone,
+                   order_status, total_amount, created_at
+            FROM orders
+            WHERE created_at >= %s AND created_at < %s
+        """
+        params = [start, end_next]
+        if status:
+            sql += " AND order_status = %s"
+            params.append(status)
+        sql += " ORDER BY created_at DESC"
+        cursor.execute(sql, params)
+
+    return cursor.fetchall()
+
+
+def build_summary(name, rows):
+    if name == "sales":
+        total = sum(r["total_amount"] for r in rows)
+        return [("Sales", len(rows)), ("Revenue", f"₹{total:.2f}")]
+
+    if name == "top_products":
+        units = sum(int(r["quantity_sold"]) for r in rows)
+        revenue = sum(r["revenue"] for r in rows)
+        return [("Products listed", len(rows)),
+                ("Units sold", units),
+                ("Revenue", f"₹{revenue:.2f}")]
+
+    if name == "low_stock":
+        out = sum(1 for r in rows if r["stock_quantity"] == 0)
+        return [("Need restocking", len(rows)), ("Out of stock", out)]
+
+    # orders: cancelled orders ko value mein nahi ginte
+    value = sum(r["total_amount"] for r in rows if r["order_status"] != "CANCELLED")
+    return [("Orders", len(rows)), ("Value (excl. cancelled)", f"₹{value:.2f}")]
+
+
+def csv_safe(value):
+    # Customer ne name mein "=HYPERLINK(...)" jaisa kuch likha ho toh
+    # Excel use formula ki tarah chala sakta hai (CSV injection).
+    if isinstance(value, str) and value[:1] in ("=", "+", "-", "@"):
+        return "'" + value
+    return value
 
 @app.route("/api/products", methods=["GET"])
 def api_products():
@@ -621,6 +789,70 @@ def catalog():
         cursor.close()
         conn.close()
 
+@app.route("/reports")
+def reports_page():
+    name = request.args.get("type", "sales")
+    if name not in REPORTS:
+        name = "sales"
+
+    start, end, status = get_report_params()
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        rows = get_report_data(cursor, name, start, end, status)
+    finally:
+        cursor.close()
+        conn.close()
+
+    return render_template(
+        "reports.html",
+        report_types=REPORTS,
+        active=name,
+        report=REPORTS[name],
+        rows=rows,
+        summary=build_summary(name, rows),
+        start=start,
+        end=end,
+        status=status,
+        statuses=ORDER_STATUSES,
+    )
+
+
+@app.route("/reports/export")
+def export_report():
+    name = request.args.get("type", "sales")
+    if name not in REPORTS:
+        abort(404)
+
+    report = REPORTS[name]
+    start, end, status = get_report_params()
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        rows = get_report_data(cursor, name, start, end, status)
+    finally:
+        cursor.close()
+        conn.close()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([label for _, label, _ in report["columns"]])
+    for row in rows:
+        writer.writerow([csv_safe(row[key]) for key, _, _ in report["columns"]])
+
+    if report["uses_dates"]:
+        filename = f"{name}_{start}_to_{end}.csv"
+    else:
+        filename = f"{name}_{date.today()}.csv"
+
+    # utf-8-sig: Excel mein special characters sahi khulte hain
+    return Response(
+        output.getvalue().encode("utf-8-sig"),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 @app.route("/products/add", methods=["GET", "POST"])
 def add_product():

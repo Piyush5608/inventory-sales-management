@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block title %}Reports | InventoryPro{% endblock %}
+
+{% block content %}
+
+<div class="mb-4">
+    <h1 class="fw-bold">Reports</h1>
+    <p class="text-secondary mb-0">{{ report.description }}</p>
+</div>
+
+<ul class="nav nav-pills mb-3 gap-1">
+    {% for key, r in report_types.items() %}
+    <li class="nav-item">
+        <a class="nav-link {% if key == active %}active{% endif %}"
+           href="{{ url_for('reports_page', type=key, start=start, end=end) }}">
+            {{ r.title }}
+        </a>
+    </li>
+    {% endfor %}
+</ul>
+
+<form method="GET" action="{{ url_for('reports_page') }}"
+      class="card border-0 shadow-sm rounded-4 p-3 mb-3">
+    <input type="hidden" name="type" value="{{ active }}">
+    <div class="row g-2 align-items-end">
+
+        {% if report.uses_dates %}
+        <div class="col-md-3">
+            <label class="form-label small mb-1">From</label>
+            <input type="date" name="start" value="{{ start }}" class="form-control">
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small mb-1">To</label>
+            <input type="date" name="end" value="{{ end }}" class="form-control">
+        </div>
+        {% endif %}
+
+        {% if report.uses_status %}
+        <div class="col-md-3">
+            <label class="form-label small mb-1">Status</label>
+            <select name="status" class="form-select">
+                <option value="">All statuses</option>
+                {% for s in statuses %}
+                    <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endif %}
+
+        <div class="col-auto d-flex gap-2">
+            {% if report.uses_dates or report.uses_status %}
+                <button type="submit" class="btn btn-primary">Apply</button>
+                <a href="{{ url_for('reports_page', type=active) }}"
+                   class="btn btn-outline-secondary">Reset</a>
+            {% endif %}
+            <a href="{{ url_for('export_report', type=active, start=start, end=end, status=status) }}"
+               class="btn btn-success">⬇ Export CSV</a>
+        </div>
+
+    </div>
+</form>
+
+<div class="row g-3 mb-3">
+    {% for label, value in summary %}
+    <div class="col-sm-6 col-lg-3">
+        <div class="card border-0 shadow-sm rounded-4 p-3">
+            <div class="text-secondary small">{{ label }}</div>
+            <div class="fs-4 fw-bold">{{ value }}</div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="card border-0 shadow-sm rounded-4 p-3">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    {% for key, label, kind in report.columns %}
+                        <th>{{ label }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr>
+                    {% for key, label, kind in report.columns %}
+                    {% set value = row[key] %}
+                    <td>
+                        {% if value is none %}-
+                        {% elif kind == 'money' %}₹{{ "%.2f"|format(value) }}
+                        {% elif kind == 'status' %}
+                            {% if value == 'PAID' %}
+                                <span class="badge bg-success">PAID</span>
+                            {% elif value == 'PENDING' %}
+                                <span class="badge bg-warning text-dark">PENDING</span>
+                            {% elif value == 'CANCELLED' %}
+                                <span class="badge bg-danger">CANCELLED</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ value }}</span>
+                            {% endif %}
+                        {% else %}{{ value }}{% endif %}
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="{{ report.columns|length }}"
+                        class="text-center text-secondary py-4">
+                        No data for this selection.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}
