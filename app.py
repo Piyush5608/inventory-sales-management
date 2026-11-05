@@ -635,6 +635,11 @@ def new_order():
                 VALUES (%s, %s, %s, %s)
             """, (order_id, product_id, quantity, product["price"]))
 
+            cursor.execute("""
+                INSERT INTO payments (order_id, provider, payment_status)
+                VALUES (%s, 'MANUAL', 'PENDING')
+            """, (order_id,))
+
             # Same as /api/orders: stock is deducted when the order is created.
             cursor.execute("""
                 UPDATE products
@@ -721,6 +726,66 @@ def order_invoice(order_id):
             items=items,
             invoice_number=f"INV-{order_id:05d}",
         )
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route("/orders/<int:order_id>/pay", methods=["POST"])
+def mark_order_paid(order_id):
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    try:
+        conn.start_transaction()
+
+        cursor.execute("""
+            SELECT order_id, order_status
+            FROM orders
+            WHERE order_id = %s
+            FOR UPDATE
+        """, (order_id,))
+        order = cursor.fetchone()
+
+        if order is None:
+            conn.rollback()
+            return "Order not found", 404
+
+        if order["order_status"] != "PENDING":
+            conn.rollback()
+            flash("Only pending orders can be marked as paid.")
+            return redirect(url_for("order_details", order_id=order_id))
+
+        cursor.execute("""
+            UPDATE orders
+            SET order_status = 'PAID'
+            WHERE order_id = %s
+              AND order_status = 'PENDING'
+        """, (order_id,))
+
+        cursor.execute("""
+            UPDATE payments
+            SET payment_status = 'SUCCESS'
+            WHERE order_id = %s
+              AND payment_status = 'PENDING'
+        """, (order_id,))
+
+        # Older orders have no payment row yet, so create one.
+        if cursor.rowcount == 0:
+            cursor.execute("""
+                INSERT INTO payments (order_id, provider, payment_status)
+                VALUES (%s, 'MANUAL', 'SUCCESS')
+            """, (order_id,))
+
+        conn.commit()
+        flash(f"Order #{order_id} marked as paid.")
+        return redirect(url_for("order_details", order_id=order_id))
+
+    except Exception:
+        conn.rollback()
+        app.logger.exception("Mark as paid failed")
+        flash("Could not mark the order as paid.")
+        return redirect(url_for("order_details", order_id=order_id))
+
     finally:
         cursor.close()
         conn.close()
@@ -1155,8 +1220,11 @@ def create_order():
             VALUES (%s, %s, %s, %s)
         """, (order_id, product_id, quantity, product["price"]))
 
-        # Stock is NOT deducted yet.
-        # It will be deducted after verified payment.later
+        cursor.execute("""
+            INSERT INTO payments (order_id, provider, payment_status)
+            VALUES (%s, 'MANUAL', 'PENDING')
+        """, (order_id,))
+
         # Deduct stock when the order is created.
         cursor.execute("""
             UPDATE products

@@ -10,7 +10,16 @@
     <p><strong>Email:</strong> {{ order.customer_email }}</p>
     <p><strong>Phone:</strong> {{ order.customer_phone or '-' }}</p>
     <p><strong>Total:</strong> ₹{{ "%.2f"|format(order.total_amount) }}</p>
-    <p><strong>Status:</strong> {{ order.order_status }}</p>
+    <p><strong>Status:</strong>
+        {% if order.order_status == 'PAID' %}
+            <span class="badge bg-success">PAID</span>
+        {% elif order.order_status == 'PENDING' %}
+            <span class="badge bg-warning text-dark">PENDING</span>
+        {% elif order.order_status == 'CANCELLED' %}
+            <span class="badge bg-danger">CANCELLED</span>
+        {% else %}
+            <span class="badge bg-secondary">{{ order.order_status }}</span>
+        {% endif %}
     <p><strong>Date:</strong> {{ order.created_at }}</p>
 
     <h4 class="mt-4">Order Items</h4>
@@ -50,6 +59,13 @@
        class="btn btn-primary ms-2" target="_blank" rel="noopener">
         🧾 View Invoice
     </a>
+    {% endif %}
+    {% if order.order_status == 'PENDING' %}
+    <form action="{{ url_for('mark_order_paid', order_id=order.order_id) }}"
+          method="POST" class="d-inline ms-2"
+          onsubmit="return confirm('Mark this order as paid?');">
+        <button type="submit" class="btn btn-success">✅ Mark as Paid</button>
+    </form>
     {% endif %}
 </div>
 {% endblock %}
