@@ -82,7 +82,8 @@
                         maxlength="255"
                         placeholder="e.g. New supplier delivery">
                 </div>
-
+                
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="btn btn-success btn-lg">
                     + Add Stock
                 </button>

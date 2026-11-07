@@ -1,3 +1,8 @@
+import os
+from dotenv import load_dotenv
+load_dotenv()
+
+
 import re
 from decimal import Decimal, InvalidOperation
 import csv
@@ -8,13 +13,20 @@ from flask import (
     redirect, url_for, flash,abort,
 )
 
+from flask_wtf import CSRFProtect
+
+
 from db import get_db_connection
 
 app = Flask(__name__)
 
-# Local development only. Move this to an environment variable
-# before publishing the project.
-app.secret_key = "change-this-to-a-random-secret"
+
+
+app.secret_key = os.getenv("SECRET_KEY")
+if not app.secret_key:
+    raise RuntimeError("SECRET_KEY is missing. Add it to your .env file.")
+
+csrf = CSRFProtect(app)
 
 # ---------- Customer validation ----------
 EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
@@ -293,8 +305,9 @@ def restock():
             quantity = request.form.get("quantity", type=int)
             notes = request.form.get("notes", "").strip()
 
-            if not product_id or not quantity or quantity < 1:
-                flash("Please select a product and enter a positive quantity.")
+
+            if not product_id or not quantity or quantity < 1 or quantity > 100000:
+                flash("Please select a product and enter a quantity between 1 and 100000.")
                 return redirect(url_for("restock"))
 
             # Lock the product row while updating stock
@@ -1389,71 +1402,6 @@ def get_payment_status(order_id):
         conn.close()
 
 
-# @app.route("/api/orders/<int:order_id>/cancel", methods=["POST"])
-# def cancel_order(order_id):
-#     conn = get_db_connection()
-#     cursor = conn.cursor(dictionary=True)
-
-#     try:
-#         conn.start_transaction()
-
-#         cursor.execute("""
-#             SELECT order_status
-#             FROM orders
-#             WHERE order_id = %s
-#             FOR UPDATE
-#         """, (order_id,))
-
-#         order = cursor.fetchone()
-
-#         if order is None:
-#             conn.rollback()
-#             return {
-#                 "success": False,
-#                 "message": "Order not found."
-#             }, 404
-
-#         if order["order_status"] != "PENDING":
-#             conn.rollback()
-#             return {
-#                 "success": False,
-#                 "message": "Only pending orders can be cancelled."
-#             }, 400
-
-#         cursor.execute("""
-#             UPDATE orders
-#             SET order_status = 'CANCELLED'
-#             WHERE order_id = %s
-#         """, (order_id,))
-
-#         cursor.execute("""
-#             UPDATE payments
-#             SET payment_status = 'FAILED'
-#             WHERE order_id = %s
-#               AND payment_status = 'PENDING'
-#         """, (order_id,))
-
-#         conn.commit()
-
-#         return {
-#             "success": True,
-#             "message": "Order cancelled successfully.",
-#             "order_id": order_id,
-#             "order_status": "CANCELLED"
-#         }, 200
-
-#     except Exception:
-#         conn.rollback()
-#         app.logger.exception("Order cancellation failed")
-#         return {
-#             "success": False,
-#             "message": "Could not cancel order."
-#         }, 500
-
-#     finally:
-#         cursor.close()
-#         conn.close()
-
 
 @app.route("/api/orders/<int:order_id>/cancel", methods=["POST"])
 def cancel_order(order_id):
@@ -1630,4 +1578,4 @@ def order_summary():
         conn.close()
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=os.getenv("FLASK_DEBUG") == "1")

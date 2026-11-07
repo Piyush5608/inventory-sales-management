@@ -12,6 +12,7 @@
 <div class="card border-0 shadow-sm rounded-4 p-4" style="max-width: 700px;">
 
     <form method="POST" action="{{ url_for('new_order') }}" class="row g-3">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
         <h5 class="fw-bold mb-0">Customer Details</h5>
 
@@ -64,9 +65,13 @@
         <div class="col-md-4">
             <label class="form-label">Quantity</label>
             <input type="number" name="quantity" min="1" class="form-control" required>
+            {% if errors and errors.quantity %}
+                <div class="text-danger small">{{ errors.quantity }}</div>
+            {% endif %}
         </div>
 
         <div class="col-12 mt-4">
+
             <button type="submit" class="btn btn-success">Place Order</button>
             <a href="{{ url_for('orders_page') }}" class="btn btn-outline-secondary ms-2">View Orders</a>
         </div>
