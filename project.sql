@@ -119,10 +119,10 @@ INSERT IGNORE INTO products (category_id, product_name, sku, price, stock_quanti
 SELECT category_id, 'Keyboard', 'ELEC-001', 799.00, 25, 5 FROM categories WHERE category_name = 'Electronics';
 
 INSERT IGNORE INTO products (category_id, product_name, sku, price, stock_quantity, reorder_level)
-SELECT category_id, 'Trimax Pen', 'STAT-002', 50.00, 100, 20 FROM categories WHERE category_name = 'Stationery';
+SELECT category_id, 'Trimax Pen', 'STAT-002', 50.00, 100, 5 FROM categories WHERE category_name = 'Stationery';
 
 INSERT IGNORE INTO products (category_id, product_name, sku, price, stock_quantity, reorder_level)
-SELECT category_id, 'Notebook', 'STAT-001', 80.00, 60, 15 FROM categories WHERE category_name = 'Stationery';
+SELECT category_id, 'Notebook', 'STAT-001', 80.00, 60, 5 FROM categories WHERE category_name = 'Stationery';
 
 INSERT IGNORE INTO products (category_id, product_name, sku, price, stock_quantity, reorder_level)
-SELECT category_id, 'USB Cable', 'ACC-001', 199.00, 50, 10 FROM categories WHERE category_name = 'Accessories';
+SELECT category_id, 'USB Cable', 'ACC-001', 199.00, 50, 5 FROM categories WHERE category_name = 'Accessories';
