@@ -17,22 +17,23 @@ Python, Flask, MySQL, Bootstrap, Chart.js, Flask-WTF
 ## Screenshots
 
 ### Dashboard
-![Dashboard](screenshots/dashboard.png)
+![Dashboard](screenshots/Dashboard.png)
 
 ### Products and Catalog
-![Products](screenshots/products.png)
-![Catalog](screenshots/product-catalog.png)
+![Products](screenshots/Products.png)
+![Catalog](screenshots/Product-Catalog.png)
 
 ### Orders and Invoice
-![Create Order](screenshots/create-order.png)
+
+![Create Order](screenshots/Create-Order.png)
 ![Invoice](screenshots/invoice.png)
 
 ### Sales and Stock
-![Record a Sale](screenshots/record-a-sale.png)
-![Sales History](screenshots/sales-history.png)
+![Record a Sale](screenshots/Record-a-sale.png)
+![Sales History](screenshots/Sales-History.png)
 
 ### Reports
-![Reports](screenshots/reports.png)
+![Reports](screenshots/Reports.png)
 
 ### order pass
 
